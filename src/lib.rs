@@ -4,6 +4,7 @@ extern crate syn;
 extern crate quote;
 
 use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
 use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields};
 
 #[proc_macro_attribute]
@@ -19,14 +20,22 @@ pub fn key_by(key: TokenStream, input: TokenStream) -> TokenStream {
         _ => panic!("expected a struct with named fields"),
     };
 
-    let key = proc_macro2::TokenStream::from(key);
+    let keys: Vec<proc_macro2::TokenStream> = key
+        .to_string()
+        .trim()
+        .split(",")
+        .map(|k| {
+            let struct_field = Ident::new(&k.trim(), Span::call_site());
+            quote! { self.#struct_field.hash(state); }
+        })
+        .collect();
 
     let output: proc_macro2::TokenStream = {
         quote! {
             #item
             impl ::std::hash::Hash for #name {
                 fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-                    self.#key.hash(state);
+                    #(#keys)*
                 }
             }
         }
